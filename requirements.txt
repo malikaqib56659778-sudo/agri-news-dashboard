@@ -1,3 +1,3 @@
 streamlit
 feedparser
-ollama
+openai
