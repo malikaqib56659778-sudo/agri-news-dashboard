@@ -1,5 +1,6 @@
 import streamlit as st
 import feedparser
+import urllib.parse
 import urllib.request
 import re
 import pandas as pd
@@ -30,9 +31,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# App Header (Simple English)
+# App Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Simple daily farming news, clear AI notes, and quick report downloads.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Simple daily farming news with real-time AI image generation and easy reports.</div>', unsafe_allow_html=True)
 
 # News Sources
 rss_feeds = {
@@ -63,26 +64,34 @@ def clean_filename(title):
     clean_str = re.sub(r'[\s-]+', '_', clean_str).strip('_')
     return clean_str[:40]
 
+def get_ai_generated_image(title):
+    """
+    Generates a unique topic-matched AI image URL for free 
+    using Pollinations AI based on the article's title.
+    """
+    clean_prompt = re.sub(r'[^\w\s]', '', title)
+    formatted_prompt = f"agricultural science photography of {clean_prompt}, high resolution, realistic farm background"
+    encoded_prompt = urllib.parse.quote(formatted_prompt)
+    return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=600&height=400&nologo=true"
+
 def extract_image_url(entry):
-    """Finds an image from the news item or creates a placeholder visual"""
+    """Checks for source image first; falls back to real-time AI topic generation."""
     # 1. Look for image in feed enclosures
     if 'enclosures' in entry:
         for enc in entry.enclosures:
             if enc.get('type', '').startswith('image'):
                 return enc.get('href')
     
-    # 2. Look for img tag inside summary HTML
+    # 2. Look for HTML img tags inside summary
     summary_raw = getattr(entry, 'summary', '')
     img_match = re.search(r'<img [^>]*src=["\']([^"\' text]+)["\']', summary_raw)
     if img_match:
         return img_match.group(1)
         
-    # 3. Fallback: Clean visual visual image placeholder matching the headline
-    topic_keywords = clean_filename(entry.title).replace('_', ',')
-    return f"https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80"
+    # 3. Dynamic Free AI Image generation specific to the headline topic
+    return get_ai_generated_image(entry.title)
 
 def call_ai_summary(text, api_key):
-    """Calls AI model using very simple, plain English instructions"""
     try:
         from openai import OpenAI
         client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
@@ -192,7 +201,6 @@ else:
         all_entries = parsed.entries
 
 if all_entries:
-    # Stats Line
     col1, col2, col3 = st.columns(3)
     col1.metric("Selected Channel", selected_source.split(" - ")[0])
     col2.metric("Articles Found", len(all_entries))
@@ -200,7 +208,6 @@ if all_entries:
 
     st.divider()
 
-    # Search Box
     search_term = st.text_input("🔍 Search news by word (e.g. Wheat, Cotton, Soil, Rain)", "").lower()
 
     filtered_entries = [
@@ -210,7 +217,6 @@ if all_entries:
 
     st.subheader(f"Showing News Articles ({len(filtered_entries)} Items)")
 
-    # Render Articles
     for idx, entry in enumerate(filtered_entries):
         clean_summary = clean_html(getattr(entry, 'summary', 'No description available.'))
         pub_date = getattr(entry, 'published', getattr(entry, 'updated', 'Recent'))
@@ -218,21 +224,20 @@ if all_entries:
         image_url = extract_image_url(entry)
         
         with st.container():
-            # Card Layout with Image column on left
             img_col, content_col = st.columns([1, 2.5])
             
             with img_col:
-                try:
-                    st.image(image_url, use_container_width=True)
-                except Exception:
-                    st.image("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80", use_container_width=True)
+                st.image(
+                    image_url, 
+                    caption="✨ AI Generated Visual for Topic", 
+                    use_container_width=True
+                )
 
             with content_col:
                 st.markdown(f"### [{idx+1}. {entry.title}]({entry.link})")
                 st.caption(f"📅 Date: {pub_date}")
                 st.write(clean_summary[:280] + ("..." if len(clean_summary) > 280 else ""))
                 
-                # Fixed AI Section Box
                 if ai_enabled:
                     if ai_key:
                         with st.expander("✨ Click to view Simple AI Explanation"):
@@ -242,7 +247,6 @@ if all_entries:
                     else:
                         st.caption("🔑 *Enter your API key in the left sidebar to unlock AI simple notes.*")
 
-            # Article Download Buttons
             d_col1, d_col2 = st.columns(2)
             
             single_csv = pd.DataFrame([{
@@ -271,7 +275,6 @@ if all_entries:
             
             st.divider()
 
-    # Master Download Section at Bottom
     st.subheader(f"📥 Download All News ({len(filtered_entries)} Articles)")
     all_col1, all_col2 = st.columns(2)
     
