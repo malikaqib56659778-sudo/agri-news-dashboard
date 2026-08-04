@@ -8,7 +8,7 @@ from fpdf import FPDF
 
 # Page configuration
 st.set_page_config(
-    page_title="Agri Pulse AI - Global Agricultural Dashboard",
+    page_title="Agri Pulse AI - Simple Farm News",
     page_icon="🌾",
     layout="wide"
 )
@@ -17,7 +17,7 @@ st.set_page_config(
 st.markdown("""
 <style>
     .main-title {
-        font-size: 2.3rem;
+        font-size: 2.2rem;
         font-weight: 700;
         color: #2E7D32;
         margin-bottom: 0px;
@@ -27,27 +27,19 @@ st.markdown("""
         font-size: 1rem;
         margin-bottom: 25px;
     }
-    .news-card {
-        background-color: #f9fbf9;
-        padding: 18px;
-        border-radius: 10px;
-        border-left: 5px solid #2E7D32;
-        margin-bottom: 15px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# App Header
+# App Header (Simple English)
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Real-time global agricultural market intelligence and automated AI summaries.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Simple daily farming news, clear AI notes, and quick report downloads.</div>', unsafe_allow_html=True)
 
-# Expanded Feeds List
+# News Sources
 rss_feeds = {
-    "All Feeds Combined": "COMBINED",
-    "ScienceDaily - Ag & Food Research": "https://www.sciencedaily.com/rss/plants_animals/agriculture_and_food.xml",
-    "Farms.com - Global Industry News": "https://m.farms.com/farmspages/generate_rss_portal/tabid/2854/default.aspx",
-    "BBC - Climate & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
+    "All News Sources Combined": "COMBINED",
+    "ScienceDaily - Crop & Soil Science": "https://www.sciencedaily.com/rss/plants_animals/agriculture_and_food.xml",
+    "Farms.com - Global Farming News": "https://m.farms.com/farmspages/generate_rss_portal/tabid/2854/default.aspx",
+    "BBC - Weather & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
 }
 
 # Helper Functions
@@ -60,7 +52,7 @@ def fetch_feed(url):
         xml_data = urllib.request.urlopen(req, timeout=10).read()
         return feedparser.parse(xml_data)
     except Exception as e:
-        st.error(f"Error connecting to server: {e}")
+        st.error(f"Could not connect to news server: {e}")
         return None
 
 def clean_html(raw_html):
@@ -71,33 +63,55 @@ def clean_filename(title):
     clean_str = re.sub(r'[\s-]+', '_', clean_str).strip('_')
     return clean_str[:40]
 
+def extract_image_url(entry):
+    """Finds an image from the news item or creates a placeholder visual"""
+    # 1. Look for image in feed enclosures
+    if 'enclosures' in entry:
+        for enc in entry.enclosures:
+            if enc.get('type', '').startswith('image'):
+                return enc.get('href')
+    
+    # 2. Look for img tag inside summary HTML
+    summary_raw = getattr(entry, 'summary', '')
+    img_match = re.search(r'<img [^>]*src=["\']([^"\' text]+)["\']', summary_raw)
+    if img_match:
+        return img_match.group(1)
+        
+    # 3. Fallback: Clean visual visual image placeholder matching the headline
+    topic_keywords = clean_filename(entry.title).replace('_', ',')
+    return f"https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80"
+
 def call_ai_summary(text, api_key):
+    """Calls AI model using very simple, plain English instructions"""
     try:
         from openai import OpenAI
         client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
-                {"role": "system", "content": "You are an expert agronomy consultant. Provide a 2-bullet point summary highlighting key agricultural implications."},
+                {
+                    "role": "system", 
+                    "content": "You are a helpful farming assistant. Explain this news in 2 very short, simple sentences using basic English. Do not use hard vocabulary."
+                },
                 {"role": "user", "content": text}
             ],
-            max_tokens=150
+            max_tokens=120
         )
         return response.choices[0].message.content
     except Exception as err:
         return f"AI Service Error: {err}"
 
-# Pure Python PDF Generator Class
+# Simple PDF Generator
 class AgriPDFReport(FPDF):
     def header(self):
         self.set_fill_color(27, 94, 32)
-        self.rect(0, 0, 210, 25, 'F')
-        self.set_font('Arial', 'B', 14)
+        self.rect(0, 0, 210, 22, 'F')
+        self.set_font('Arial', 'B', 13)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 8, 'Agri Pulse AI -- Intelligence Report', 0, 1, 'L')
+        self.cell(0, 6, 'Agri Pulse AI -- News & Farm Updates Report', 0, 1, 'L')
         self.set_font('Arial', '', 9)
-        self.cell(0, 4, 'Agricultural Market & Research Briefing', 0, 1, 'L')
-        self.ln(10)
+        self.cell(0, 4, 'Easy-to-read Summary Report', 0, 1, 'L')
+        self.ln(8)
 
     def footer(self):
         self.set_y(-15)
@@ -111,28 +125,27 @@ def generate_pdf_report(source_name, entries):
     
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(46, 125, 50)
-    pdf.cell(35, 6, "Source Feed:", 0, 0)
+    pdf.cell(35, 6, "News Source:", 0, 0)
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(50, 50, 50)
     pdf.cell(60, 6, source_name, 0, 0)
     
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(46, 125, 50)
-    pdf.cell(35, 6, "Date Generated:", 0, 0)
+    pdf.cell(35, 6, "Report Date:", 0, 0)
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(50, 50, 50)
     pdf.cell(0, 6, datetime.now().strftime("%B %d, %Y"), 0, 1)
     
-    pdf.ln(5)
+    pdf.ln(4)
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
-    pdf.ln(5)
+    pdf.ln(4)
     
-    pdf.set_font('Arial', 'B', 12)
+    pdf.set_font('Arial', 'B', 11)
     pdf.set_text_color(27, 94, 32)
-    pdf.cell(0, 8, f"Aggregated News Summaries (Total: {len(entries)})", 0, 1)
+    pdf.cell(0, 8, f"Summary List (Total Items: {len(entries)})", 0, 1)
     pdf.ln(2)
 
-    # NO LIMIT: Generates PDF rows for every single entry supplied
     for idx, item in enumerate(entries, 1):
         pdf.set_font('Arial', 'B', 10)
         pdf.set_text_color(27, 94, 32)
@@ -142,7 +155,7 @@ def generate_pdf_report(source_name, entries):
         pub_date = getattr(item, 'published', getattr(item, 'updated', 'Recent'))
         pdf.set_font('Arial', 'I', 8)
         pdf.set_text_color(128, 128, 128)
-        pdf.cell(0, 4, f"Published: {pub_date}", 0, 1)
+        pdf.cell(0, 4, f"Published Date: {pub_date}", 0, 1)
         
         summary_text = clean_html(getattr(item, 'summary', 'No summary available.'))[:350]
         safe_summary = summary_text.encode('latin-1', 'replace').decode('latin-1')
@@ -154,17 +167,17 @@ def generate_pdf_report(source_name, entries):
 
     return bytes(pdf.output())
 
-# Sidebar Controls
+# Sidebar Menu
 with st.sidebar:
-    st.header("⚙️ Dashboard Controls")
-    selected_source = st.selectbox("📰 Select News Source", list(rss_feeds.keys()))
+    st.header("⚙️ Controls & Options")
+    selected_source = st.selectbox("📰 Choose News Source", list(rss_feeds.keys()))
     
     st.divider()
-    st.header("🤖 AI Integration Settings")
-    ai_key = st.text_input("Enter Groq / OpenAI API Key", type="password", help="Get a free key from console.groq.com")
-    ai_enabled = st.checkbox("Enable AI Article Summaries", value=False)
+    st.header("🤖 Easy AI Helper")
+    ai_key = st.text_input("Paste Groq / OpenAI API Key", type="password", help="Enter key to enable simple AI notes")
+    ai_enabled = st.checkbox("Turn On AI Simple Notes", value=True)
 
-# Data Fetching Logic (Supports Single Source or Combined)
+# Fetch News Data
 all_entries = []
 
 if rss_feeds[selected_source] == "COMBINED":
@@ -179,45 +192,57 @@ else:
         all_entries = parsed.entries
 
 if all_entries:
-    # Top Metrics
+    # Stats Line
     col1, col2, col3 = st.columns(3)
-    col1.metric("Active Source", selected_source.split(" - ")[0])
-    col2.metric("Total Articles Loaded", len(all_entries))
-    col3.metric("System Status", "Live Connection 🟢")
+    col1.metric("Selected Channel", selected_source.split(" - ")[0])
+    col2.metric("Articles Found", len(all_entries))
+    col3.metric("Connection", "Active 🟢")
 
     st.divider()
 
-    # Search Bar
-    search_term = st.text_input("🔍 Search Articles by Keyword / Crop Name", "").lower()
+    # Search Box
+    search_term = st.text_input("🔍 Search news by word (e.g. Wheat, Cotton, Soil, Rain)", "").lower()
 
     filtered_entries = [
         entry for entry in all_entries 
         if search_term in entry.title.lower() or search_term in getattr(entry, 'summary', '').lower()
     ]
 
-    st.subheader(f"Showing Articles ({len(filtered_entries)} Total Loaded)")
+    st.subheader(f"Showing News Articles ({len(filtered_entries)} Items)")
 
-    # Render Cards (Unlimited Loop)
+    # Render Articles
     for idx, entry in enumerate(filtered_entries):
-        clean_summary = clean_html(getattr(entry, 'summary', 'No summary available.'))
+        clean_summary = clean_html(getattr(entry, 'summary', 'No description available.'))
         pub_date = getattr(entry, 'published', getattr(entry, 'updated', 'Recent'))
         article_slug = clean_filename(entry.title)
+        image_url = extract_image_url(entry)
         
         with st.container():
-            st.markdown(f"### [{idx+1}. {entry.title}]({entry.link})")
-            st.caption(f"📅 Published: {pub_date}")
-            st.write(clean_summary[:300] + ("..." if len(clean_summary) > 300 else ""))
+            # Card Layout with Image column on left
+            img_col, content_col = st.columns([1, 2.5])
             
-            if ai_enabled:
-                if ai_key:
-                    with st.expander("✨ View AI Insights & Agronomy Summary"):
-                        with st.spinner("Analyzing article..."):
-                            summary_result = call_ai_summary(clean_summary, ai_key)
-                            st.write(summary_result)
-                else:
-                    st.warning("Please enter your API key in the sidebar menu to unlock AI Summaries.")
-            
-            # Individual Article Download Buttons
+            with img_col:
+                try:
+                    st.image(image_url, use_container_width=True)
+                except Exception:
+                    st.image("https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=800&q=80", use_container_width=True)
+
+            with content_col:
+                st.markdown(f"### [{idx+1}. {entry.title}]({entry.link})")
+                st.caption(f"📅 Date: {pub_date}")
+                st.write(clean_summary[:280] + ("..." if len(clean_summary) > 280 else ""))
+                
+                # Fixed AI Section Box
+                if ai_enabled:
+                    if ai_key:
+                        with st.expander("✨ Click to view Simple AI Explanation"):
+                            with st.spinner("AI is writing simple notes..."):
+                                summary_result = call_ai_summary(clean_summary, ai_key)
+                                st.info(f"**Simple Summary:**\n\n{summary_result}")
+                    else:
+                        st.caption("🔑 *Enter your API key in the left sidebar to unlock AI simple notes.*")
+
+            # Article Download Buttons
             d_col1, d_col2 = st.columns(2)
             
             single_csv = pd.DataFrame([{
@@ -228,7 +253,7 @@ if all_entries:
             }]).to_csv(index=False).encode('utf-8')
             
             d_col1.download_button(
-                label="📊 Export Article CSV",
+                label="📊 Save Article CSV",
                 data=single_csv,
                 file_name=f"{article_slug}.csv",
                 mime="text/csv",
@@ -237,7 +262,7 @@ if all_entries:
             
             single_pdf = generate_pdf_report(selected_source, [entry])
             d_col2.download_button(
-                label="📄 Export Article PDF",
+                label="📄 Save Article PDF",
                 data=single_pdf,
                 file_name=f"{article_slug}.pdf",
                 mime="application/pdf",
@@ -246,8 +271,8 @@ if all_entries:
             
             st.divider()
 
-    # --- MASTER UNLIMITED DOWNLOAD AT THE BOTTOM ---
-    st.subheader(f"📥 Export Complete Feed Report ({len(filtered_entries)} Articles)")
+    # Master Download Section at Bottom
+    st.subheader(f"📥 Download All News ({len(filtered_entries)} Articles)")
     all_col1, all_col2 = st.columns(2)
     
     full_export_data = []
@@ -265,20 +290,20 @@ if all_entries:
     source_slug = clean_filename(selected_source)
     
     all_col1.download_button(
-        label=f"📊 Download All ({len(filtered_entries)}) Articles CSV",
+        label=f"📊 Download All ({len(filtered_entries)}) Items CSV",
         data=full_csv,
-        file_name=f"Full_Feed_{source_slug}_{datetime.now().strftime('%Y%m%d')}.csv",
+        file_name=f"Full_News_{source_slug}_{datetime.now().strftime('%Y%m%d')}.csv",
         mime="text/csv",
         key="full_csv_btn"
     )
     
     all_col2.download_button(
-        label=f"📄 Download All ({len(filtered_entries)}) Articles PDF",
+        label=f"📄 Download All ({len(filtered_entries)}) Items PDF",
         data=full_pdf,
-        file_name=f"Full_Feed_{source_slug}_{datetime.now().strftime('%Y%m%d')}.pdf",
+        file_name=f"Full_News_{source_slug}_{datetime.now().strftime('%Y%m%d')}.pdf",
         mime="application/pdf",
         key="full_pdf_btn"
     )
 
 else:
-    st.warning("Currently unable to retrieve live articles for this feed. Try selecting another source from the sidebar.")
+    st.warning("No news items found right now. Please select another source from the left sidebar.")
