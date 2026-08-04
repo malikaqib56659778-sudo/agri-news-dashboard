@@ -27,14 +27,14 @@ st.markdown("""
     .sub-title {
         color: #555555;
         font-size: 1rem;
-        margin-bottom: 25px;
+        margin-bottom: 15px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # App Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Unlimited farming news with pin favorites, auto-shuffle refresh, and reports.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Unlimited farming news with stable pinned favorites, shuffle refresh, and reports.</div>', unsafe_allow_html=True)
 
 # Expanded News Sources
 rss_feeds = {
@@ -176,18 +176,25 @@ def generate_pdf_report(source_name, entries):
 
     return bytes(pdf.output())
 
-# Initialize Session State for Pinned Articles
+# Initialize Session State Variables
 if "pinned_articles" not in st.session_state:
     st.session_state.pinned_articles = []
 
-# Sidebar Menu with Shuffle & Clear Cache
+if "last_source" not in st.session_state:
+    st.session_state.last_source = ""
+
+if "shuffled_entries" not in st.session_state:
+    st.session_state.shuffled_entries = []
+
+# Sidebar Menu
 with st.sidebar:
     st.header("⚙️ Controls & Options")
     selected_source = st.selectbox("📰 Choose News Source", list(rss_feeds.keys()))
     
     st.divider()
-    if st.button("🔄 Shuffle & Refresh Fresh News"):
+    if st.button("🔀 Shuffle & Change Articles (Sidebar)"):
         st.cache_data.clear()
+        st.session_state.last_source = "" 
         st.rerun()
 
     st.divider()
@@ -197,35 +204,48 @@ with st.sidebar:
     ai_key = st.text_input("Paste Groq / OpenAI API Key", value=default_key, type="password", help="Enter key to enable complete AI explanations")
     ai_enabled = st.checkbox("Turn On AI Simple Notes", value=True)
 
-# Fetch News Data Automatically across all sources
-all_entries = []
+# Main Screen Quick Shuffle Button
+if st.button("🔀 Shuffle & Get New Articles", type="primary", use_container_width=True):
+    st.cache_data.clear()
+    st.session_state.last_source = ""
+    st.rerun()
 
-if rss_feeds[selected_source] == "COMBINED":
-    for name, url in rss_feeds.items():
-        if url != "COMBINED":
-            parsed = fetch_feed(url)
-            if parsed and parsed.entries:
-                all_entries.extend(parsed.entries)
-else:
-    parsed = fetch_feed(rss_feeds[selected_source])
-    if parsed and parsed.entries:
-        all_entries = parsed.entries
+st.divider()
 
-# Remove duplicates & Shuffle order randomly on every refresh (simulates swipe-down-to-change)
-seen_titles = set()
-unique_entries = []
-for entry in all_entries:
-    title = getattr(entry, 'title', '')
-    if title not in seen_titles:
-        seen_titles.add(title)
-        unique_entries.append(entry)
+# Fetch and Lock Shuffled Feed in Session State
+if selected_source != st.session_state.last_source or not st.session_state.shuffled_entries:
+    all_entries = []
+    if rss_feeds[selected_source] == "COMBINED":
+        for name, url in rss_feeds.items():
+            if url != "COMBINED":
+                parsed = fetch_feed(url)
+                if parsed and parsed.entries:
+                    all_entries.extend(parsed.entries)
+    else:
+        parsed = fetch_feed(rss_feeds[selected_source])
+        if parsed and parsed.entries:
+            all_entries = parsed.entries
 
-random.shuffle(unique_entries)
+    # Remove duplicates
+    seen_titles = set()
+    unique_entries = []
+    for entry in all_entries:
+        title = getattr(entry, 'title', '')
+        if title not in seen_titles:
+            seen_titles.add(title)
+            unique_entries.append(entry)
 
-if unique_entries:
+    # Shuffle once and store in session state
+    random.shuffle(unique_entries)
+    st.session_state.shuffled_entries = unique_entries
+    st.session_state.last_source = selected_source
+
+current_entries = st.session_state.shuffled_entries
+
+if current_entries:
     col1, col2, col3 = st.columns(3)
     col1.metric("Selected Channel", selected_source.split(" - ")[0])
-    col2.metric("Total Articles Available", len(unique_entries))
+    col2.metric("Total Articles Available", len(current_entries))
     col3.metric("Live Feed", "Active 🟢")
 
     st.divider()
@@ -233,11 +253,11 @@ if unique_entries:
     search_term = st.text_input("🔍 Search news by word (e.g. Wheat, Cotton, Soil, Rain)", "").lower()
 
     filtered_entries = [
-        entry for entry in unique_entries 
+        entry for entry in current_entries 
         if search_term in getattr(entry, 'title', '').lower() or search_term in clean_html(getattr(entry, 'summary', '')).lower()
     ]
 
-    # Sort filtered entries so Pinned articles appear at the very top
+    # Sort so Pinned articles stay locked at the top
     pinned_titles = st.session_state.pinned_articles
     filtered_entries.sort(key=lambda x: 0 if getattr(x, 'title', '') in pinned_titles else 1)
 
@@ -254,7 +274,6 @@ if unique_entries:
         is_pinned = title in st.session_state.pinned_articles
 
         with st.container():
-            # Pin / Unpin button header line
             p_col1, p_col2 = st.columns([6, 1])
             with p_col1:
                 if is_pinned:
@@ -331,7 +350,7 @@ if unique_entries:
             "Link": getattr(e, 'link', '#'),
             "Summary": clean_html(getattr(e, 'summary', ''))
         })
-     
+    
     full_csv = pd.DataFrame(full_export_data).to_csv(index=False).encode('utf-8')
     full_pdf = generate_pdf_report(selected_source, filtered_entries)
     
@@ -354,4 +373,4 @@ if unique_entries:
     )
 
 else:
-    st.warning("No news items found right now. Please select another source or click 'Shuffle & Refresh Fresh News' in the sidebar.")
+    st.warning("No news items found right now. Please select another source or click 'Shuffle & Get New Articles'.")
