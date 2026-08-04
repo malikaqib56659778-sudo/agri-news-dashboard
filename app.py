@@ -1,3 +1,6 @@
+import streamlit as st
+import feedparser
+
 # Multiple RSS feeds setup
 rss_feeds = {
     "USDA News": "https://www.usda.gov/rss/latest-releases.xml",
