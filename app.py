@@ -33,7 +33,7 @@ st.markdown("""
 
 # App Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Simple daily farming news with real-time AI image generation and easy reports.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Complete farming news in short, easy English with free AI images and reports.</div>', unsafe_allow_html=True)
 
 # News Sources
 rss_feeds = {
@@ -43,7 +43,7 @@ rss_feeds = {
     "BBC - Weather & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
 }
 
-# Helper Functions with Safe Fallbacks
+# Helper Functions
 def fetch_feed(url):
     try:
         req = urllib.request.Request(
@@ -97,26 +97,26 @@ def call_ai_summary(text, api_key):
             messages=[
                 {
                     "role": "system", 
-                    "content": "You are a helpful farming assistant. Explain this news in 2 very short, simple sentences using basic English. Do not use hard vocabulary."
+                    "content": "You are a helpful farming assistant. Give complete details of this news in short, simple sentences using basic English. Avoid hard words."
                 },
                 {"role": "user", "content": text}
             ],
-            max_tokens=120
+            max_tokens=150
         )
         return response.choices[0].message.content
     except Exception as err:
         return f"AI Service Error: {err}"
 
-# Simple PDF Generator
+# Complete PDF Generator
 class AgriPDFReport(FPDF):
     def header(self):
         self.set_fill_color(27, 94, 32)
         self.rect(0, 0, 210, 22, 'F')
         self.set_font('Arial', 'B', 13)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 6, 'Agri Pulse AI -- News & Farm Updates Report', 0, 1, 'L')
+        self.cell(0, 6, 'Agri Pulse AI -- Complete Farm News Report', 0, 1, 'L')
         self.set_font('Arial', '', 9)
-        self.cell(0, 4, 'Easy-to-read Summary Report', 0, 1, 'L')
+        self.cell(0, 4, 'Easy English Summary', 0, 1, 'L')
         self.ln(8)
 
     def footer(self):
@@ -149,7 +149,7 @@ def generate_pdf_report(source_name, entries):
     
     pdf.set_font('Arial', 'B', 11)
     pdf.set_text_color(27, 94, 32)
-    pdf.cell(0, 8, f"Summary List (Total Items: {len(entries)})", 0, 1)
+    pdf.cell(0, 8, f"Complete News List (Total Items: {len(entries)})", 0, 1)
     pdf.ln(2)
 
     for idx, item in enumerate(entries, 1):
@@ -164,13 +164,14 @@ def generate_pdf_report(source_name, entries):
         pdf.set_text_color(128, 128, 128)
         pdf.cell(0, 4, f"Published Date: {pub_date}", 0, 1)
         
-        summary_text = clean_html(getattr(item, 'summary', 'No summary available.'))[:350]
+        # COMPLETE SUMMARY WITHOUT TRUNCATION
+        summary_text = clean_html(getattr(item, 'summary', 'No summary available.'))
         safe_summary = summary_text.encode('latin-1', 'replace').decode('latin-1')
         
         pdf.set_font('Arial', '', 9)
         pdf.set_text_color(60, 60, 60)
-        pdf.multi_cell(0, 4.5, f"{safe_summary}...")
-        pdf.ln(4)
+        pdf.multi_cell(0, 4.5, safe_summary)
+        pdf.ln(5)
 
     return bytes(pdf.output())
 
@@ -181,10 +182,10 @@ with st.sidebar:
     
     st.divider()
     st.header("🤖 Easy AI Helper")
-    ai_key = st.text_input("Paste Groq / OpenAI API Key", type="password", help="Enter key to enable simple AI notes")
+    ai_key = st.text_input("Paste Groq / OpenAI API Key", type="password", help="Enter key to enable complete AI explanations")
     ai_enabled = st.checkbox("Turn On AI Simple Notes", value=True)
 
-# Fetch News Data safely
+# Fetch News Data
 all_entries = []
 
 if rss_feeds[selected_source] == "COMBINED":
@@ -229,23 +230,25 @@ if all_entries:
             with img_col:
                 st.image(
                     image_url, 
-                    caption="✨ AI Generated Visual for Topic", 
+                    caption="✨ AI Generated Visual", 
                     use_container_width=True
                 )
 
             with content_col:
                 st.markdown(f"### [{idx+1}. {title}]({link})")
                 st.caption(f"📅 Date: {pub_date}")
-                st.write(clean_summary[:280] + ("..." if len(clean_summary) > 280 else ""))
+                
+                # SHOW FULL COMPLETE TEXT WITHOUT CUTTING OFF
+                st.write(clean_summary)
                 
                 if ai_enabled:
                     if ai_key:
-                        with st.expander("✨ Click to view Simple AI Explanation"):
-                            with st.spinner("AI is writing simple notes..."):
+                        with st.expander("✨ Click to view Complete AI Explanation"):
+                            with st.spinner("AI is writing complete simple notes..."):
                                 summary_result = call_ai_summary(clean_summary, ai_key)
-                                st.info(f"**Simple Summary:**\n\n{summary_result}")
+                                st.info(f"**Complete Summary:**\n\n{summary_result}")
                     else:
-                        st.caption("🔑 *Enter your API key in the left sidebar to unlock AI simple notes.*")
+                        st.caption("🔑 *Enter your API key in the left sidebar to unlock AI notes.*")
 
             d_col1, d_col2 = st.columns(2)
             
@@ -257,7 +260,7 @@ if all_entries:
             }]).to_csv(index=False).encode('utf-8')
             
             d_col1.download_button(
-                label="📊 Save Article CSV",
+                label="📊 Save Complete CSV",
                 data=single_csv,
                 file_name=f"{article_slug}.csv",
                 mime="text/csv",
@@ -266,7 +269,7 @@ if all_entries:
             
             single_pdf = generate_pdf_report(selected_source, [entry])
             d_col2.download_button(
-                label="📄 Save Article PDF",
+                label="📄 Save Complete PDF",
                 data=single_pdf,
                 file_name=f"{article_slug}.pdf",
                 mime="application/pdf",
@@ -275,7 +278,7 @@ if all_entries:
             
             st.divider()
 
-    st.subheader(f"📥 Download All News ({len(filtered_entries)} Articles)")
+    st.subheader(f"📥 Download All News Reports ({len(filtered_entries)} Articles)")
     all_col1, all_col2 = st.columns(2)
     
     full_export_data = []
