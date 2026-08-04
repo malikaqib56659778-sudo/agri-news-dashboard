@@ -81,16 +81,16 @@ def call_ai_summary(text, api_key):
     except Exception as err:
         return f"AI Service Error: {err}"
 
-# Pure Python FPDF Report Generator
+# Pure Python PDF Generator Class
 class AgriPDFReport(FPDF):
     def header(self):
-        self.set_fill_color(27, 94, 32) # Dark Green Banner
+        self.set_fill_color(27, 94, 32)
         self.rect(0, 0, 210, 25, 'F')
         self.set_font('Arial', 'B', 14)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 8, 'Agri Pulse AI -- News Intelligence Report', 0, 1, 'L')
+        self.cell(0, 8, 'Agri Pulse AI -- Intelligence Report', 0, 1, 'L')
         self.set_font('Arial', '', 9)
-        self.cell(0, 4, 'Automated Agricultural Market & Research Briefing', 0, 1, 'L')
+        self.cell(0, 4, 'Agricultural Market & Research Briefing', 0, 1, 'L')
         self.ln(10)
 
     def footer(self):
@@ -103,7 +103,6 @@ def generate_pdf_report(source_name, entries):
     pdf = AgriPDFReport()
     pdf.add_page()
     
-    # Metadata Block
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(46, 125, 50)
     pdf.cell(35, 6, "Source Feed:", 0, 0)
@@ -122,18 +121,14 @@ def generate_pdf_report(source_name, entries):
     pdf.line(10, pdf.get_y(), 200, pdf.get_y())
     pdf.ln(5)
     
-    # Section Header
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(27, 94, 32)
     pdf.cell(0, 8, "Aggregated News & Research Summaries", 0, 1)
     pdf.ln(2)
 
-    # Article Listings
-    for idx, item in enumerate(entries[:10], 1):
+    for idx, item in enumerate(entries, 1):
         pdf.set_font('Arial', 'B', 10)
         pdf.set_text_color(27, 94, 32)
-        
-        # Clean special non-latin characters for standard PDF safety
         safe_title = item.title.encode('latin-1', 'replace').decode('latin-1')
         pdf.multi_cell(0, 5, f"{idx}. {safe_title}")
         
@@ -183,48 +178,10 @@ if feed_data and feed_data.entries:
         if search_term in entry.title.lower() or search_term in getattr(entry, 'summary', '').lower()
     ]
 
-    # Sidebar Export Tools
-    with st.sidebar:
-        st.divider()
-        st.header("📥 Export Intelligence Report")
-        
-        # CSV Export
-        export_data = []
-        for e in filtered_entries[:15]:
-            export_data.append({
-                "Title": e.title,
-                "Published Date": getattr(e, 'published', getattr(e, 'updated', 'N/A')),
-                "Link": e.link,
-                "Summary": clean_html(getattr(e, 'summary', ''))
-            })
-        df_export = pd.DataFrame(export_data)
-        csv_bytes = df_export.to_csv(index=False).encode('utf-8')
-        
-        st.download_button(
-            label="📊 Download CSV Data",
-            data=csv_bytes,
-            file_name=f"Agri_News_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
-
-        # PDF Export
-        try:
-            pdf_bytes = generate_pdf_report(selected_source, filtered_entries)
-            st.download_button(
-                label="📄 Download PDF Report",
-                data=pdf_bytes,
-                file_name=f"Agri_Intelligence_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        except Exception as e:
-            st.caption(f"PDF Notice: {e}")
-
     st.subheader(f"Showing Top Articles ({len(filtered_entries)})")
 
-    # Render Cards
-    for entry in filtered_entries[:10]:
+    # Render Cards with Download Options at the end of EVERY article
+    for idx, entry in enumerate(filtered_entries[:10]):
         clean_summary = clean_html(getattr(entry, 'summary', 'No summary available.'))
         pub_date = getattr(entry, 'published', getattr(entry, 'updated', 'Recent'))
         
@@ -242,6 +199,67 @@ if feed_data and feed_data.entries:
                 else:
                     st.warning("Please enter your API key in the sidebar menu to unlock AI Summaries.")
             
+            # --- DOWNLOAD BUTTONS AT THE END OF THIS SPECIFIC ARTICLE ---
+            d_col1, d_col2 = st.columns(2)
+            
+            # Article CSV Download
+            single_csv = pd.DataFrame([{
+                "Title": entry.title,
+                "Published Date": pub_date,
+                "Link": entry.link,
+                "Summary": clean_summary
+            }]).to_csv(index=False).encode('utf-8')
+            
+            d_col1.download_button(
+                label=f"📊 Export Article CSV",
+                data=single_csv,
+                file_name=f"Article_{idx+1}_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                key=f"csv_btn_{idx}"
+            )
+            
+            # Article PDF Download
+            single_pdf = generate_pdf_report(selected_source, [entry])
+            d_col2.download_button(
+                label=f"📄 Export Article PDF",
+                data=single_pdf,
+                file_name=f"Article_{idx+1}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf",
+                key=f"pdf_btn_{idx}"
+            )
+            
             st.divider()
+
+    # --- MASTER DOWNLOAD BUTTONS AT THE VERY END OF THE PAGE ---
+    st.subheader("📥 Export Full Feed Report (All Articles)")
+    all_col1, all_col2 = st.columns(2)
+    
+    full_export_data = []
+    for e in filtered_entries[:15]:
+        full_export_data.append({
+            "Title": e.title,
+            "Published Date": getattr(e, 'published', getattr(e, 'updated', 'N/A')),
+            "Link": e.link,
+            "Summary": clean_html(getattr(e, 'summary', ''))
+        })
+    full_csv = pd.DataFrame(full_export_data).to_csv(index=False).encode('utf-8')
+    full_pdf = generate_pdf_report(selected_source, filtered_entries[:10])
+    
+    all_col1.download_button(
+        label="📊 Download Full CSV (All Articles)",
+        data=full_csv,
+        file_name=f"Full_Agri_News_{datetime.now().strftime('%Y%m%d')}.csv",
+        mime="text/csv",
+        key="full_csv_btn"
+    )
+    
+    all_col2.download_button(
+        label="📄 Download Full PDF (All Articles)",
+        data=full_pdf,
+        file_name=f"Full_Agri_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+        mime="application/pdf",
+        key="full_pdf_btn"
+    )
+
 else:
     st.warning("Currently unable to retrieve live articles for this feed. Try selecting another source from the sidebar.")
