@@ -33,14 +33,16 @@ st.markdown("""
 
 # App Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Complete farming news in short, easy English with free AI images and reports.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Unlimited farming news updates in short, easy English with free AI images and reports.</div>', unsafe_allow_html=True)
 
-# News Sources
+# Expanded News Sources for Unlimited Fresh Content
 rss_feeds = {
-    "All News Sources Combined": "COMBINED",
+    "All News Sources Combined (Unlimited)": "COMBINED",
     "ScienceDaily - Crop & Soil Science": "https://www.sciencedaily.com/rss/plants_animals/agriculture_and_food.xml",
     "Farms.com - Global Farming News": "https://m.farms.com/farmspages/generate_rss_portal/tabid/2854/default.aspx",
-    "BBC - Weather & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
+    "BBC - Weather & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
+    "Phys.org - Agriculture & Plants": "https://phys.org/rss-feed/earth-news/agriculture/",
+    "EurekAlert! - Agriculture": "https://www.eurekalert.org/rss/agriculture.xml"
 }
 
 # Helper Functions
@@ -53,7 +55,6 @@ def fetch_feed(url):
         xml_data = urllib.request.urlopen(req, timeout=10).read()
         return feedparser.parse(xml_data)
     except Exception as e:
-        st.error(f"Could not connect to news server: {e}")
         return None
 
 def clean_html(raw_html):
@@ -174,20 +175,24 @@ def generate_pdf_report(source_name, entries):
 
     return bytes(pdf.output())
 
-# Sidebar Menu with Automatic Secrets Support
+# Sidebar Menu with Fresh Cache Cleaner
 with st.sidebar:
     st.header("⚙️ Controls & Options")
     selected_source = st.selectbox("📰 Choose News Source", list(rss_feeds.keys()))
     
     st.divider()
+    if st.button("🔄 Clear Cache & Fetch Fresh News"):
+        st.cache_data.clear()
+        st.rerun()
+
+    st.divider()
     st.header("🤖 Easy AI Helper")
     
-    # Automatically load from Streamlit secrets if available, otherwise let you type it
     default_key = st.secrets.get("GROQ_API_KEY", "") if "GROQ_API_KEY" in st.secrets else ""
     ai_key = st.text_input("Paste Groq / OpenAI API Key", value=default_key, type="password", help="Enter key to enable complete AI explanations")
     ai_enabled = st.checkbox("Turn On AI Simple Notes", value=True)
 
-# Fetch News Data
+# Fetch News Data Automatically across all sources
 all_entries = []
 
 if rss_feeds[selected_source] == "COMBINED":
@@ -201,18 +206,27 @@ else:
     if parsed and parsed.entries:
         all_entries = parsed.entries
 
-if all_entries:
+# Remove duplicate entries based on title
+seen_titles = set()
+unique_entries = []
+for entry in all_entries:
+    title = getattr(entry, 'title', '')
+    if title not in seen_titles:
+        seen_titles.add(title)
+        unique_entries.append(entry)
+
+if unique_entries:
     col1, col2, col3 = st.columns(3)
     col1.metric("Selected Channel", selected_source.split(" - ")[0])
-    col2.metric("Articles Found", len(all_entries))
-    col3.metric("Connection", "Active 🟢")
+    col2.metric("Total Articles Available", len(unique_entries))
+    col3.metric("Live Feed", "Active 🟢")
 
     st.divider()
 
     search_term = st.text_input("🔍 Search news by word (e.g. Wheat, Cotton, Soil, Rain)", "").lower()
 
     filtered_entries = [
-        entry for entry in all_entries 
+        entry for entry in unique_entries 
         if search_term in getattr(entry, 'title', '').lower() or search_term in clean_html(getattr(entry, 'summary', '')).lower()
     ]
 
@@ -312,4 +326,4 @@ if all_entries:
     )
 
 else:
-    st.warning("No news items found right now. Please select another source from the left sidebar.")
+    st.warning("No news items found right now. Please select another source or click 'Clear Cache & Fetch Fresh News' in the sidebar.")
