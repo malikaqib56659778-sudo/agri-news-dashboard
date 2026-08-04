@@ -2,6 +2,9 @@ import streamlit as st
 import feedparser
 import urllib.request
 import re
+import pandas as pd
+from datetime import datetime
+from weasyprint import HTML
 
 # Page configuration
 st.set_page_config(
@@ -32,18 +35,10 @@ st.markdown("""
         margin-bottom: 15px;
         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-    .badge {
-        background-color: #E8F5E9;
-        color: #1B5E20;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
 </style>
 """, unsafe_allow_html=True)
 
-# App Top Banner
+# App Title Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Real-time global agricultural market intelligence and automated AI summaries.</div>', unsafe_allow_html=True)
 
@@ -54,21 +49,7 @@ rss_feeds = {
     "BBC - Climate & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
 }
 
-# Sidebar Navigation & AI Configuration
-with st.sidebar:
-    st.header("⚙️ Dashboard Controls")
-    selected_source = st.selectbox("📰 Select News Source", list(rss_feeds.keys()))
-    
-    st.divider()
-    st.header("🤖 AI Integration Settings")
-    st.caption("Summarize news using free cloud AI (Groq / OpenAI API).")
-    ai_key = st.text_input("Enter Groq / OpenAI API Key", type="password", help="Optional: Get a free key from console.groq.com")
-    ai_enabled = st.checkbox("Enable AI Article Summaries", value=False)
-    
-    st.divider()
-    st.info("💡 **Tip:** Use the search bar on the main page to filter articles by specific crops like *Sugarcane, Wheat, Cotton, or Soil*.")
-
-# Article Fetching Logic with User-Agent setup
+# Article Fetching Helper Functions
 def fetch_feed(url):
     try:
         req = urllib.request.Request(
@@ -82,11 +63,9 @@ def fetch_feed(url):
         return None
 
 def clean_html(raw_html):
-    clean_text = re.sub(re.compile('<.*?>'), '', raw_html)
-    return clean_text
+    return re.sub(re.compile('<.*?>'), '', raw_html)
 
 def call_ai_summary(text, api_key):
-    # Optional Groq/OpenAI integration logic
     try:
         from openai import OpenAI
         client = OpenAI(base_url="https://api.groq.com/openai/v1", api_key=api_key)
@@ -100,14 +79,86 @@ def call_ai_summary(text, api_key):
         )
         return response.choices[0].message.content
     except Exception as err:
-        return f"AI Service Error: Ensure your API key is correct. ({err})"
+        return f"AI Service Error: {err}"
+
+# Function to generate downloadable PDF report via WeasyPrint
+def generate_pdf_report(source_name, entries):
+    today_str = datetime.now().strftime("%B %d, %Y")
+    
+    articles_html = ""
+    for idx, item in enumerate(entries[:10], 1):
+        summary_text = clean_html(getattr(item, 'summary', 'No summary provided.'))
+        pub_date = getattr(item, 'published', getattr(item, 'updated', 'Recent'))
+        articles_html += f"""
+        <div style="background:#ffffff; border:1px solid #e0e0e0; border-left:5px solid #2e7d32; padding:12px 16px; margin-bottom:12px; page-break-inside:avoid;">
+            <div style="font-size:11pt; font-weight:bold; color:#1b5e20; margin-bottom:4px;">{idx}. {item.title}</div>
+            <div style="font-size:8.5pt; color:#7f8c8d; margin-bottom:6px;">📅 Published: {pub_date}</div>
+            <div style="font-size:9.5pt; line-height:1.4; color:#34495e;">{summary_text[:350]}...</div>
+        </div>
+        """
+
+    html_template = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        @page {{ size: A4; margin: 15mm 12mm; background-color: #fafbfa; }}
+        body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #2c3e50; margin: 0; }}
+        .header {{ background: linear-gradient(135deg, #1b5e20, #2e7d32); color: white; padding: 18px 22px; margin: -15mm -12mm 15px -12mm; }}
+        .header h1 {{ margin: 0; font-size: 18pt; }}
+        .header p {{ margin: 4px 0 0 0; font-size: 9.5pt; opacity: 0.9; }}
+        .meta-table {{ width: 100%; border-collapse: collapse; background: #fff; margin-bottom: 15px; border: 1px solid #e0e0e0; }}
+        .meta-table td {{ padding: 8px 12px; font-size: 9pt; border-bottom: 1px solid #f0f0f0; }}
+        .meta-label {{ font-weight: bold; color: #2e7d32; width: 25%; }}
+        .section-title {{ font-size: 12pt; color: #1b5e20; border-bottom: 2px solid #2e7d32; padding-bottom: 4px; margin: 15px 0 10px 0; text-transform: uppercase; }}
+        .footer {{ margin-top: 25px; text-align: center; font-size: 8pt; color: #95a5a6; border-top: 1px solid #e0e0e0; padding-top: 8px; }}
+    </style>
+    </head>
+    <body>
+        <div class="header">
+            <h1>🌾 Agri Pulse AI — News Intelligence Report</h1>
+            <p>Automated Agricultural News Analysis & Market Briefing</p>
+        </div>
+        <table class="meta-table">
+            <tr>
+                <td class="meta-label">News Source:</td>
+                <td>{source_name}</td>
+                <td class="meta-label">Generated On:</td>
+                <td>{today_str}</td>
+            </tr>
+            <tr>
+                <td class="meta-label">Total Articles:</td>
+                <td>{len(entries[:10])} Articles</td>
+                <td class="meta-label">Status:</td>
+                <td>Live Data Sync 🟢</td>
+            </tr>
+        </table>
+        <div class="section-title">Summary of Top News & Findings</div>
+        {articles_html}
+        <div class="footer">
+            Report generated by Agri Pulse AI Dashboard • Powered by Streamlit & Groq AI
+        </div>
+    </body>
+    </html>
+    """
+    return HTML(string=html_template).write_pdf()
+
+# Sidebar Navigation
+with st.sidebar:
+    st.header("⚙️ Dashboard Controls")
+    selected_source = st.selectbox("📰 Select News Source", list(rss_feeds.keys()))
+    
+    st.divider()
+    st.header("🤖 AI Integration Settings")
+    ai_key = st.text_input("Enter Groq / OpenAI API Key", type="password", help="Get a free key from console.groq.com")
+    ai_enabled = st.checkbox("Enable AI Article Summaries", value=False)
 
 # Fetch Data
 feed_url = rss_feeds[selected_source]
 feed_data = fetch_feed(feed_url)
 
 if feed_data and feed_data.entries:
-    # Main Dashboard Metrics
+    # Top Level Metrics
     col1, col2, col3 = st.columns(3)
     col1.metric("Active Source", selected_source.split(" - ")[0])
     col2.metric("Total Articles Loaded", len(feed_data.entries))
@@ -115,7 +166,7 @@ if feed_data and feed_data.entries:
 
     st.divider()
 
-    # Search & Filter Bar
+    # Search Bar
     search_term = st.text_input("🔍 Search Articles by Keyword / Crop Name", "").lower()
 
     # Filter articles
@@ -124,8 +175,47 @@ if feed_data and feed_data.entries:
         if search_term in entry.title.lower() or search_term in getattr(entry, 'summary', '').lower()
     ]
 
+    # Sidebar Export Section
+    with st.sidebar:
+        st.divider()
+        st.header("📥 Export Intelligence Report")
+        
+        # 1. Export CSV
+        export_data = []
+        for e in filtered_entries[:15]:
+            export_data.append({
+                "Title": e.title,
+                "Published Date": getattr(e, 'published', getattr(e, 'updated', 'N/A')),
+                "Link": e.link,
+                "Summary": clean_html(getattr(e, 'summary', ''))
+            })
+        df_export = pd.DataFrame(export_data)
+        csv_bytes = df_export.to_csv(index=False).encode('utf-8')
+        
+        st.download_button(
+            label="📊 Download CSV Data",
+            data=csv_bytes,
+            file_name=f"Agri_News_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+        # 2. Export PDF
+        try:
+            pdf_bytes = generate_pdf_report(selected_source, filtered_entries)
+            st.download_button(
+                label="📄 Download PDF Report",
+                data=pdf_bytes,
+                file_name=f"Agri_Intelligence_Report_{datetime.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        except Exception as e:
+            st.caption(f"PDF Export setup notice: {e}")
+
     st.subheader(f"Showing Top Articles ({len(filtered_entries)})")
 
+    # Display Article Cards
     for entry in filtered_entries[:10]:
         clean_summary = clean_html(getattr(entry, 'summary', 'No summary available.'))
         pub_date = getattr(entry, 'published', getattr(entry, 'updated', 'Recent'))
@@ -135,7 +225,6 @@ if feed_data and feed_data.entries:
             st.caption(f"📅 Published: {pub_date}")
             st.write(clean_summary[:300] + ("..." if len(clean_summary) > 300 else ""))
             
-            # Integrated AI Summary Trigger
             if ai_enabled:
                 if ai_key:
                     with st.expander("✨ View AI Insights & Agronomy Summary"):
