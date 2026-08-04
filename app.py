@@ -1,40 +1,57 @@
 import streamlit as st
 import feedparser
+import urllib.request
 
-# App Title
-st.title("🌾 Agricultural News Dashboard")
+# Page configuration
+st.set_page_config(page_title="Agri News Dashboard", page_icon="🌾", layout="wide")
 
-# Reliable Working Agricultural RSS Feeds
+st.title("🌾 Agricultural News & Market Dashboard")
+st.write("Stay up-to-date with free, real-time agricultural news feeds from around the world.")
+
+# Fully open, free, and cloud-friendly agricultural RSS sources
 rss_feeds = {
-    "AgWeb News": "https://www.agweb.com/rss/news",
-    "Farm Progress": "https://www.farmprogress.com/rss.xml",
-    "USDA ARS Research": "https://www.ars.usda.gov/rss/news.xml",
-    "FAO News Feed": "https://www.fao.org/newsroom/rss/en/"
+    "ScienceDaily - Ag & Food Research": "https://www.sciencedaily.com/rss/plants_animals/agriculture_and_food.xml",
+    "Farms.com - Industry News": "https://m.farms.com/farmspages/generate_rss_portal/tabid/2854/default.aspx",
+    "USDA NASS - Reports & Events": "https://www.nass.usda.gov/Help/RSS/index.php",
+    "BBC News - Science & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
 }
 
-# Sidebar dropdown to choose the source
-selected_source = st.sidebar.selectbox("Choose News Source", list(rss_feeds.keys()))
+# Sidebar source selection
+selected_source = st.sidebar.selectbox("📰 Select News Source", list(rss_feeds.keys()))
 feed_url = rss_feeds[selected_source]
 
-st.subheader(f"Latest Updates from {selected_source}")
+st.subheader(f"Latest Updates: {selected_source}")
 
-# Fetch RSS Feed with custom User-Agent to bypass standard bot blocks
-headers = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-}
+# Robust Fetching Function to prevent Streamlit Cloud blocking
+def fetch_feed(url):
+    try:
+        req = urllib.request.Request(
+            url, 
+            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36'}
+        )
+        xml_data = urllib.request.urlopen(req, timeout=10).read()
+        return feedparser.parse(xml_data)
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return None
 
-feed = feedparser.parse(feed_url, request_headers=headers)
+# Display News Articles
+feed = fetch_feed(feed_url)
 
-if feed.entries:
-    for entry in feed.entries[:10]:  # Displays the top 10 articles
+if feed and feed.entries:
+    for entry in feed.entries[:10]:  # Display top 10 articles
         st.markdown(f"### [{entry.title}]({entry.link})")
+        
         if hasattr(entry, 'published'):
-            st.caption(f"Published on: {entry.published}")
+            st.caption(f"📅 Published: {entry.published}")
         elif hasattr(entry, 'updated'):
-            st.caption(f"Updated on: {entry.updated}")
+            st.caption(f"📅 Updated: {entry.updated}")
             
         if hasattr(entry, 'summary'):
-            st.write(entry.summary)
+            # Basic cleanup of summary text
+            summary_text = entry.summary.split('<')[0] if '<' in entry.summary else entry.summary
+            st.write(summary_text)
+            
         st.divider()
 else:
-    st.warning("Unable to reach this specific feed right now. Please select another source from the sidebar menu.")
+    st.warning("No articles found or feed source is currently unreachable. Please choose another source from the sidebar menu.")
