@@ -42,8 +42,9 @@ st.markdown("""
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-title">Real-time global agricultural market intelligence and automated AI summaries.</div>', unsafe_allow_html=True)
 
-# Feeds
+# Expanded Feeds List
 rss_feeds = {
+    "All Feeds Combined": "COMBINED",
     "ScienceDaily - Ag & Food Research": "https://www.sciencedaily.com/rss/plants_animals/agriculture_and_food.xml",
     "Farms.com - Global Industry News": "https://m.farms.com/farmspages/generate_rss_portal/tabid/2854/default.aspx",
     "BBC - Climate & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
@@ -66,7 +67,6 @@ def clean_html(raw_html):
     return re.sub(re.compile('<.*?>'), '', raw_html)
 
 def clean_filename(title):
-    """Converts article headline into a safe filename string"""
     clean_str = re.sub(r'[^\w\s-]', '', title)
     clean_str = re.sub(r'[\s-]+', '_', clean_str).strip('_')
     return clean_str[:40]
@@ -129,9 +129,10 @@ def generate_pdf_report(source_name, entries):
     
     pdf.set_font('Arial', 'B', 12)
     pdf.set_text_color(27, 94, 32)
-    pdf.cell(0, 8, "Aggregated News & Research Summaries", 0, 1)
+    pdf.cell(0, 8, f"Aggregated News Summaries (Total: {len(entries)})", 0, 1)
     pdf.ln(2)
 
+    # NO LIMIT: Generates PDF rows for every single entry supplied
     for idx, item in enumerate(entries, 1):
         pdf.set_font('Arial', 'B', 10)
         pdf.set_text_color(27, 94, 32)
@@ -163,39 +164,47 @@ with st.sidebar:
     ai_key = st.text_input("Enter Groq / OpenAI API Key", type="password", help="Get a free key from console.groq.com")
     ai_enabled = st.checkbox("Enable AI Article Summaries", value=False)
 
-# Fetch Data
-feed_url = rss_feeds[selected_source]
-feed_data = fetch_feed(feed_url)
+# Data Fetching Logic (Supports Single Source or Combined)
+all_entries = []
 
-if feed_data and feed_data.entries:
-    # Top Stats
+if rss_feeds[selected_source] == "COMBINED":
+    for name, url in rss_feeds.items():
+        if url != "COMBINED":
+            parsed = fetch_feed(url)
+            if parsed and parsed.entries:
+                all_entries.extend(parsed.entries)
+else:
+    parsed = fetch_feed(rss_feeds[selected_source])
+    if parsed and parsed.entries:
+        all_entries = parsed.entries
+
+if all_entries:
+    # Top Metrics
     col1, col2, col3 = st.columns(3)
     col1.metric("Active Source", selected_source.split(" - ")[0])
-    col2.metric("Total Articles Loaded", len(feed_data.entries))
+    col2.metric("Total Articles Loaded", len(all_entries))
     col3.metric("System Status", "Live Connection 🟢")
 
     st.divider()
 
-    # Search
+    # Search Bar
     search_term = st.text_input("🔍 Search Articles by Keyword / Crop Name", "").lower()
 
     filtered_entries = [
-        entry for entry in feed_data.entries 
+        entry for entry in all_entries 
         if search_term in entry.title.lower() or search_term in getattr(entry, 'summary', '').lower()
     ]
 
-    st.subheader(f"Showing Articles ({len(filtered_entries)})")
+    st.subheader(f"Showing Articles ({len(filtered_entries)} Total Loaded)")
 
-    # Display Article Cards
-    for idx, entry in enumerate(filtered_entries[:10]):
+    # Render Cards (Unlimited Loop)
+    for idx, entry in enumerate(filtered_entries):
         clean_summary = clean_html(getattr(entry, 'summary', 'No summary available.'))
         pub_date = getattr(entry, 'published', getattr(entry, 'updated', 'Recent'))
-        
-        # Generate dynamic file name based on actual article title
         article_slug = clean_filename(entry.title)
         
         with st.container():
-            st.markdown(f"### [{entry.title}]({entry.link})")
+            st.markdown(f"### [{idx+1}. {entry.title}]({entry.link})")
             st.caption(f"📅 Published: {pub_date}")
             st.write(clean_summary[:300] + ("..." if len(clean_summary) > 300 else ""))
             
@@ -208,10 +217,9 @@ if feed_data and feed_data.entries:
                 else:
                     st.warning("Please enter your API key in the sidebar menu to unlock AI Summaries.")
             
-            # --- DOWNLOAD BUTTONS NAMED AFTER ARTICLE TITLE ---
+            # Individual Article Download Buttons
             d_col1, d_col2 = st.columns(2)
             
-            # CSV Download
             single_csv = pd.DataFrame([{
                 "Title": entry.title,
                 "Published Date": pub_date,
@@ -227,7 +235,6 @@ if feed_data and feed_data.entries:
                 key=f"csv_btn_{idx}"
             )
             
-            # PDF Download
             single_pdf = generate_pdf_report(selected_source, [entry])
             d_col2.download_button(
                 label="📄 Export Article PDF",
@@ -239,25 +246,26 @@ if feed_data and feed_data.entries:
             
             st.divider()
 
-    # --- MASTER DOWNLOAD AT BOTTOM ---
-    st.subheader("📥 Export Full Feed Report (All Articles)")
+    # --- MASTER UNLIMITED DOWNLOAD AT THE BOTTOM ---
+    st.subheader(f"📥 Export Complete Feed Report ({len(filtered_entries)} Articles)")
     all_col1, all_col2 = st.columns(2)
     
     full_export_data = []
-    for e in filtered_entries[:15]:
+    for e in filtered_entries:
         full_export_data.append({
             "Title": e.title,
             "Published Date": getattr(e, 'published', getattr(e, 'updated', 'N/A')),
             "Link": e.link,
             "Summary": clean_html(getattr(e, 'summary', ''))
         })
+    
     full_csv = pd.DataFrame(full_export_data).to_csv(index=False).encode('utf-8')
-    full_pdf = generate_pdf_report(selected_source, filtered_entries[:10])
+    full_pdf = generate_pdf_report(selected_source, filtered_entries)
     
     source_slug = clean_filename(selected_source)
     
     all_col1.download_button(
-        label="📊 Download Full CSV (All Articles)",
+        label=f"📊 Download All ({len(filtered_entries)}) Articles CSV",
         data=full_csv,
         file_name=f"Full_Feed_{source_slug}_{datetime.now().strftime('%Y%m%d')}.csv",
         mime="text/csv",
@@ -265,7 +273,7 @@ if feed_data and feed_data.entries:
     )
     
     all_col2.download_button(
-        label="📄 Download Full PDF (All Articles)",
+        label=f"📄 Download All ({len(filtered_entries)}) Articles PDF",
         data=full_pdf,
         file_name=f"Full_Feed_{source_slug}_{datetime.now().strftime('%Y%m%d')}.pdf",
         mime="application/pdf",
