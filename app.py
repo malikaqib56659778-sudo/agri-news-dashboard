@@ -43,7 +43,7 @@ rss_feeds = {
     "BBC - Weather & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml"
 }
 
-# Helper Functions
+# Helper Functions with Safe Fallbacks
 def fetch_feed(url):
     try:
         req = urllib.request.Request(
@@ -57,39 +57,36 @@ def fetch_feed(url):
         return None
 
 def clean_html(raw_html):
+    if not raw_html:
+        return "No description available."
     return re.sub(re.compile('<.*?>'), '', raw_html)
 
 def clean_filename(title):
+    if not title:
+        return "news_article"
     clean_str = re.sub(r'[^\w\s-]', '', title)
     clean_str = re.sub(r'[\s-]+', '_', clean_str).strip('_')
     return clean_str[:40]
 
 def get_ai_generated_image(title):
-    """
-    Generates a unique topic-matched AI image URL for free 
-    using Pollinations AI based on the article's title.
-    """
-    clean_prompt = re.sub(r'[^\w\s]', '', title)
+    safe_title = title if title else "agriculture farm field"
+    clean_prompt = re.sub(r'[^\w\s]', '', safe_title)
     formatted_prompt = f"agricultural science photography of {clean_prompt}, high resolution, realistic farm background"
     encoded_prompt = urllib.parse.quote(formatted_prompt)
     return f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=600&height=400&nologo=true"
 
 def extract_image_url(entry):
-    """Checks for source image first; falls back to real-time AI topic generation."""
-    # 1. Look for image in feed enclosures
     if 'enclosures' in entry:
         for enc in entry.enclosures:
             if enc.get('type', '').startswith('image'):
                 return enc.get('href')
     
-    # 2. Look for HTML img tags inside summary
     summary_raw = getattr(entry, 'summary', '')
     img_match = re.search(r'<img [^>]*src=["\']([^"\' text]+)["\']', summary_raw)
     if img_match:
         return img_match.group(1)
         
-    # 3. Dynamic Free AI Image generation specific to the headline topic
-    return get_ai_generated_image(entry.title)
+    return get_ai_generated_image(getattr(entry, 'title', 'Agriculture News'))
 
 def call_ai_summary(text, api_key):
     try:
@@ -158,7 +155,8 @@ def generate_pdf_report(source_name, entries):
     for idx, item in enumerate(entries, 1):
         pdf.set_font('Arial', 'B', 10)
         pdf.set_text_color(27, 94, 32)
-        safe_title = item.title.encode('latin-1', 'replace').decode('latin-1')
+        title_str = getattr(item, 'title', 'Untitled Article')
+        safe_title = title_str.encode('latin-1', 'replace').decode('latin-1')
         pdf.multi_cell(0, 5, f"{idx}. {safe_title}")
         
         pub_date = getattr(item, 'published', getattr(item, 'updated', 'Recent'))
@@ -186,7 +184,7 @@ with st.sidebar:
     ai_key = st.text_input("Paste Groq / OpenAI API Key", type="password", help="Enter key to enable simple AI notes")
     ai_enabled = st.checkbox("Turn On AI Simple Notes", value=True)
 
-# Fetch News Data
+# Fetch News Data safely
 all_entries = []
 
 if rss_feeds[selected_source] == "COMBINED":
@@ -212,15 +210,17 @@ if all_entries:
 
     filtered_entries = [
         entry for entry in all_entries 
-        if search_term in entry.title.lower() or search_term in getattr(entry, 'summary', '').lower()
+        if search_term in getattr(entry, 'title', '').lower() or search_term in clean_html(getattr(entry, 'summary', '')).lower()
     ]
 
     st.subheader(f"Showing News Articles ({len(filtered_entries)} Items)")
 
     for idx, entry in enumerate(filtered_entries):
+        title = getattr(entry, 'title', 'Untitled Article')
+        link = getattr(entry, 'link', '#')
         clean_summary = clean_html(getattr(entry, 'summary', 'No description available.'))
         pub_date = getattr(entry, 'published', getattr(entry, 'updated', 'Recent'))
-        article_slug = clean_filename(entry.title)
+        article_slug = clean_filename(title)
         image_url = extract_image_url(entry)
         
         with st.container():
@@ -234,7 +234,7 @@ if all_entries:
                 )
 
             with content_col:
-                st.markdown(f"### [{idx+1}. {entry.title}]({entry.link})")
+                st.markdown(f"### [{idx+1}. {title}]({link})")
                 st.caption(f"📅 Date: {pub_date}")
                 st.write(clean_summary[:280] + ("..." if len(clean_summary) > 280 else ""))
                 
@@ -250,9 +250,9 @@ if all_entries:
             d_col1, d_col2 = st.columns(2)
             
             single_csv = pd.DataFrame([{
-                "Title": entry.title,
+                "Title": title,
                 "Published Date": pub_date,
-                "Link": entry.link,
+                "Link": link,
                 "Summary": clean_summary
             }]).to_csv(index=False).encode('utf-8')
             
@@ -281,9 +281,9 @@ if all_entries:
     full_export_data = []
     for e in filtered_entries:
         full_export_data.append({
-            "Title": e.title,
+            "Title": getattr(e, 'title', 'Untitled'),
             "Published Date": getattr(e, 'published', getattr(e, 'updated', 'N/A')),
-            "Link": e.link,
+            "Link": getattr(e, 'link', '#'),
             "Summary": clean_html(getattr(e, 'summary', ''))
         })
     
