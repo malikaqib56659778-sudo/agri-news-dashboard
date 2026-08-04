@@ -1,3 +1,5 @@
 streamlit
 feedparser
 openai
+pandas
+weasyprint
