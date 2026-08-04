@@ -164,7 +164,6 @@ def generate_pdf_report(source_name, entries):
         pdf.set_text_color(128, 128, 128)
         pdf.cell(0, 4, f"Published Date: {pub_date}", 0, 1)
         
-        # COMPLETE SUMMARY WITHOUT TRUNCATION
         summary_text = clean_html(getattr(item, 'summary', 'No summary available.'))
         safe_summary = summary_text.encode('latin-1', 'replace').decode('latin-1')
         
@@ -175,14 +174,17 @@ def generate_pdf_report(source_name, entries):
 
     return bytes(pdf.output())
 
-# Sidebar Menu
+# Sidebar Menu with Automatic Secrets Support
 with st.sidebar:
     st.header("⚙️ Controls & Options")
     selected_source = st.selectbox("📰 Choose News Source", list(rss_feeds.keys()))
     
     st.divider()
     st.header("🤖 Easy AI Helper")
-    ai_key = st.text_input("Paste Groq / OpenAI API Key", type="password", help="Enter key to enable complete AI explanations")
+    
+    # Automatically load from Streamlit secrets if available, otherwise let you type it
+    default_key = st.secrets.get("GROQ_API_KEY", "") if "GROQ_API_KEY" in st.secrets else ""
+    ai_key = st.text_input("Paste Groq / OpenAI API Key", value=default_key, type="password", help="Enter key to enable complete AI explanations")
     ai_enabled = st.checkbox("Turn On AI Simple Notes", value=True)
 
 # Fetch News Data
@@ -237,8 +239,6 @@ if all_entries:
             with content_col:
                 st.markdown(f"### [{idx+1}. {title}]({link})")
                 st.caption(f"📅 Date: {pub_date}")
-                
-                # SHOW FULL COMPLETE TEXT WITHOUT CUTTING OFF
                 st.write(clean_summary)
                 
                 if ai_enabled:
