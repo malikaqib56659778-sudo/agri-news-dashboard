@@ -3,6 +3,7 @@ import feedparser
 import urllib.parse
 import urllib.request
 import re
+import random
 import pandas as pd
 from datetime import datetime
 from fpdf import FPDF
@@ -33,9 +34,9 @@ st.markdown("""
 
 # App Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Unlimited farming news updates in short, easy English with free AI images and reports.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Unlimited farming news with pin favorites, auto-shuffle refresh, and reports.</div>', unsafe_allow_html=True)
 
-# Expanded News Sources for Unlimited Fresh Content
+# Expanded News Sources
 rss_feeds = {
     "All News Sources Combined (Unlimited)": "COMBINED",
     "ScienceDaily - Crop & Soil Science": "https://www.sciencedaily.com/rss/plants_animals/agriculture_and_food.xml",
@@ -175,13 +176,17 @@ def generate_pdf_report(source_name, entries):
 
     return bytes(pdf.output())
 
-# Sidebar Menu with Fresh Cache Cleaner
+# Initialize Session State for Pinned Articles
+if "pinned_articles" not in st.session_state:
+    st.session_state.pinned_articles = []
+
+# Sidebar Menu with Shuffle & Clear Cache
 with st.sidebar:
     st.header("⚙️ Controls & Options")
     selected_source = st.selectbox("📰 Choose News Source", list(rss_feeds.keys()))
     
     st.divider()
-    if st.button("🔄 Clear Cache & Fetch Fresh News"):
+    if st.button("🔄 Shuffle & Refresh Fresh News"):
         st.cache_data.clear()
         st.rerun()
 
@@ -206,7 +211,7 @@ else:
     if parsed and parsed.entries:
         all_entries = parsed.entries
 
-# Remove duplicate entries based on title
+# Remove duplicates & Shuffle order randomly on every refresh (simulates swipe-down-to-change)
 seen_titles = set()
 unique_entries = []
 for entry in all_entries:
@@ -214,6 +219,8 @@ for entry in all_entries:
     if title not in seen_titles:
         seen_titles.add(title)
         unique_entries.append(entry)
+
+random.shuffle(unique_entries)
 
 if unique_entries:
     col1, col2, col3 = st.columns(3)
@@ -230,6 +237,10 @@ if unique_entries:
         if search_term in getattr(entry, 'title', '').lower() or search_term in clean_html(getattr(entry, 'summary', '')).lower()
     ]
 
+    # Sort filtered entries so Pinned articles appear at the very top
+    pinned_titles = st.session_state.pinned_articles
+    filtered_entries.sort(key=lambda x: 0 if getattr(x, 'title', '') in pinned_titles else 1)
+
     st.subheader(f"Showing News Articles ({len(filtered_entries)} Items)")
 
     for idx, entry in enumerate(filtered_entries):
@@ -240,7 +251,24 @@ if unique_entries:
         article_slug = clean_filename(title)
         image_url = extract_image_url(entry)
         
+        is_pinned = title in st.session_state.pinned_articles
+
         with st.container():
+            # Pin / Unpin button header line
+            p_col1, p_col2 = st.columns([6, 1])
+            with p_col1:
+                if is_pinned:
+                    st.markdown("📌 **[PINNED FAVORITE]**")
+            with p_col2:
+                if is_pinned:
+                    if st.button("Unpin ❌", key=f"pin_{idx}"):
+                        st.session_state.pinned_articles.remove(title)
+                        st.rerun()
+                else:
+                    if st.button("Pin 📌", key=f"pin_{idx}"):
+                        st.session_state.pinned_articles.append(title)
+                        st.rerun()
+
             img_col, content_col = st.columns([1, 2.5])
             
             with img_col:
@@ -303,7 +331,7 @@ if unique_entries:
             "Link": getattr(e, 'link', '#'),
             "Summary": clean_html(getattr(e, 'summary', ''))
         })
-    
+     
     full_csv = pd.DataFrame(full_export_data).to_csv(index=False).encode('utf-8')
     full_pdf = generate_pdf_report(selected_source, filtered_entries)
     
@@ -326,4 +354,4 @@ if unique_entries:
     )
 
 else:
-    st.warning("No news items found right now. Please select another source or click 'Clear Cache & Fetch Fresh News' in the sidebar.")
+    st.warning("No news items found right now. Please select another source or click 'Shuffle & Refresh Fresh News' in the sidebar.")
