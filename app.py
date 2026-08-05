@@ -10,7 +10,7 @@ from fpdf import FPDF
 
 # Page configuration
 st.set_page_config(
-    page_title="Agri Pulse AI - Simple Farm News",
+    page_title="Agri Pulse AI - Universal & Simple Farm News",
     page_icon="🌾",
     layout="wide"
 )
@@ -34,7 +34,7 @@ st.markdown("""
 
 # App Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Global farming news with ultra-simple English, live updates, and reports.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Universal news aggregator with ultra-simple English, global RSS sources, and real-time search.</div>', unsafe_allow_html=True)
 
 # Massive Expanded RSS Feed Directory
 rss_feeds = {
@@ -49,7 +49,10 @@ rss_feeds = {
     "Farm Progress - Farming & Livestock": "https://www.farmprogress.com/rss.xml",
     "World Grain News": "https://www.world-grain.com/rss/articles",
     "Agriland - Farming News": "https://www.agriland.ie/feed/",
-    "Successful Farming": "https://www.agriculture.com/rss/all"
+    "Successful Farming": "https://www.agriculture.com/rss/all",
+    "USDA Agricultural Research": "https://www.ars.usda.gov/news-events/news-rss/",
+    "CGIAR Agricultural Innovation": "https://www.cgiar.org/news-events/news/feed/",
+    "AgWeb - Farm Journal": "https://www.agweb.com/rss/all"
 }
 
 # Helper Functions
@@ -63,6 +66,11 @@ def fetch_feed(url):
         return feedparser.parse(xml_data)
     except Exception as e:
         return None
+
+def fetch_google_news_search(query):
+    encoded_query = urllib.parse.quote(query)
+    google_rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
+    return fetch_feed(google_rss_url)
 
 def clean_html(raw_html):
     if not raw_html:
@@ -130,7 +138,7 @@ class AgriPDFReport(FPDF):
         self.rect(0, 0, 210, 22, 'F')
         self.set_font('Arial', 'B', 13)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 6, 'Agri Pulse AI -- Easy Farm News Report', 0, 1, 'L')
+        self.cell(0, 6, 'Agri Pulse AI -- Easy News Report', 0, 1, 'L')
         self.set_font('Arial', '', 9)
         self.cell(0, 4, 'Simple English Notes for Easy Reading', 0, 1, 'L')
         self.ln(8)
@@ -168,12 +176,12 @@ def generate_pdf_report(source_name, entries):
     pdf.cell(0, 8, f"Complete News List (Total Items: {len(entries)})", 0, 1)
     pdf.ln(2)
 
-    for idx, item in enumerate(entries, 1):
+    for item in entries:
         pdf.set_font('Arial', 'B', 10)
         pdf.set_text_color(27, 94, 32)
         title_str = getattr(item, 'title', 'Untitled Article')
         safe_title = title_str.encode('latin-1', 'replace').decode('latin-1')
-        pdf.multi_cell(0, 5, f"{idx}. {safe_title}")
+        pdf.multi_cell(0, 5, f"{safe_title}")
         
         pub_date = getattr(item, 'published', getattr(item, 'updated', 'Recent'))
         pdf.set_font('Arial', 'I', 8)
@@ -256,20 +264,31 @@ if selected_source != st.session_state.last_source or not st.session_state.shuff
 
 current_entries = st.session_state.shuffled_entries
 
+search_term = st.text_input("🌐 Universal Search (Search ANY word or topic from across the globe)", "").strip()
+
+if search_term:
+    search_lower = search_term.lower()
+    filtered_entries = [
+        entry for entry in current_entries 
+        if search_lower in getattr(entry, 'title', '').lower() or search_lower in clean_html(getattr(entry, 'summary', '')).lower()
+    ]
+    
+    # Universal Fallback: If no local feed results found, query Google News live
+    if not filtered_entries:
+        st.info(f"🌐 Fetching live global news results for **'{search_term}'** from across the web...")
+        live_search_parsed = fetch_google_news_search(search_term)
+        if live_search_parsed and live_search_parsed.entries:
+            filtered_entries = live_search_parsed.entries
+else:
+    filtered_entries = current_entries
+
 if current_entries:
     col1, col2, col3 = st.columns(3)
     col1.metric("Selected Channel", selected_source.split(" - ")[0])
-    col2.metric("Total Articles Loaded", len(current_entries))
+    col2.metric("Total Articles Loaded", len(filtered_entries))
     col3.metric("Live Feed Status", "Active & Fresh 🟢")
 
     st.divider()
-
-    search_term = st.text_input("🔍 Search news by word (e.g. Wheat, Cotton, Soil, Fertilizer, Rain)", "").lower()
-
-    filtered_entries = [
-        entry for entry in current_entries 
-        if search_term in getattr(entry, 'title', '').lower() or search_term in clean_html(getattr(entry, 'summary', '')).lower()
-    ]
 
     # Keep pinned articles at top
     pinned_titles = st.session_state.pinned_articles
@@ -312,7 +331,8 @@ if current_entries:
                 )
 
             with content_col:
-                st.markdown(f"### [{idx+1}. {title}]({link})")
+                # Article title without numbers
+                st.markdown(f"### [{title}]({link})")
                 st.caption(f"📅 Date: {pub_date}")
                 st.write(clean_summary)
                 
@@ -321,7 +341,7 @@ if current_entries:
                         with st.expander("✨ Click to view Super Simple English Explanation"):
                             with st.spinner("AI is writing ultra-simple notes..."):
                                 summary_result = call_ai_summary(clean_summary, ai_key)
-                                st.success(f"**Easy Notes for Farmers & Students:**\n\n{summary_result}")
+                                st.success(f"**Easy Notes:**\n\n{summary_result}")
                     else:
                         st.caption("🔑 *Enter your API key in the left sidebar to unlock easy AI notes.*")
 
