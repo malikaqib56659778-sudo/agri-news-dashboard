@@ -34,16 +34,22 @@ st.markdown("""
 
 # App Header
 st.markdown('<div class="main-title">🌾 Agri Pulse AI Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Unlimited farming news with stable pinned favorites, shuffle refresh, and reports.</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Global farming news with ultra-simple English, live updates, and reports.</div>', unsafe_allow_html=True)
 
-# Expanded News Sources
+# Massive Expanded RSS Feed Directory
 rss_feeds = {
-    "All News Sources Combined (Unlimited)": "COMBINED",
+    "All Global Sources Combined (Unlimited)": "COMBINED",
     "ScienceDaily - Crop & Soil Science": "https://www.sciencedaily.com/rss/plants_animals/agriculture_and_food.xml",
     "Farms.com - Global Farming News": "https://m.farms.com/farmspages/generate_rss_portal/tabid/2854/default.aspx",
     "BBC - Weather & Environment": "https://feeds.bbci.co.uk/news/science_and_environment/rss.xml",
     "Phys.org - Agriculture & Plants": "https://phys.org/rss-feed/earth-news/agriculture/",
-    "EurekAlert! - Agriculture": "https://www.eurekalert.org/rss/agriculture.xml"
+    "EurekAlert! - Agriculture": "https://www.eurekalert.org/rss/agriculture.xml",
+    "UN FAO Newsroom": "https://www.fao.org/news/rss-feed/en/",
+    "AgFunder News - AgTech & Innovation": "https://agfundernews.com/feed",
+    "Farm Progress - Farming & Livestock": "https://www.farmprogress.com/rss.xml",
+    "World Grain News": "https://www.world-grain.com/rss/articles",
+    "Agriland - Farming News": "https://www.agriland.ie/feed/",
+    "Successful Farming": "https://www.agriculture.com/rss/all"
 }
 
 # Helper Functions
@@ -90,6 +96,7 @@ def extract_image_url(entry):
         
     return get_ai_generated_image(getattr(entry, 'title', 'Agriculture News'))
 
+# Ultra-Simple English AI Prompt
 def call_ai_summary(text, api_key):
     try:
         from openai import OpenAI
@@ -99,7 +106,14 @@ def call_ai_summary(text, api_key):
             messages=[
                 {
                     "role": "system", 
-                    "content": "You are a helpful farming assistant. Give complete details of this news in short, simple sentences using basic English. Avoid hard words."
+                    "content": (
+                        "You are a friendly farming helper explaining news to a farmer or student. "
+                        "Rules:\n"
+                        "1. Use extremely basic, simple English (5th-grade level).\n"
+                        "2. Keep sentence length short (5-10 words maximum per sentence).\n"
+                        "3. Do NOT use scientific or hard words. Replace 'yield' with 'crop production', 'pathogen' with 'disease', 'pesticide' with 'pest killer spray'.\n"
+                        "4. Write in 3 short bullet points starting with clear emoji."
+                    )
                 },
                 {"role": "user", "content": text}
             ],
@@ -116,9 +130,9 @@ class AgriPDFReport(FPDF):
         self.rect(0, 0, 210, 22, 'F')
         self.set_font('Arial', 'B', 13)
         self.set_text_color(255, 255, 255)
-        self.cell(0, 6, 'Agri Pulse AI -- Complete Farm News Report', 0, 1, 'L')
+        self.cell(0, 6, 'Agri Pulse AI -- Easy Farm News Report', 0, 1, 'L')
         self.set_font('Arial', '', 9)
-        self.cell(0, 4, 'Easy English Summary', 0, 1, 'L')
+        self.cell(0, 4, 'Simple English Notes for Easy Reading', 0, 1, 'L')
         self.ln(8)
 
     def footer(self):
@@ -176,7 +190,7 @@ def generate_pdf_report(source_name, entries):
 
     return bytes(pdf.output())
 
-# Initialize Session State Variables
+# Session State Setup
 if "pinned_articles" not in st.session_state:
     st.session_state.pinned_articles = []
 
@@ -186,33 +200,33 @@ if "last_source" not in st.session_state:
 if "shuffled_entries" not in st.session_state:
     st.session_state.shuffled_entries = []
 
-# Sidebar Menu
+# Sidebar Controls
 with st.sidebar:
     st.header("⚙️ Controls & Options")
     selected_source = st.selectbox("📰 Choose News Source", list(rss_feeds.keys()))
     
     st.divider()
-    if st.button("🔀 Shuffle & Change Articles (Sidebar)"):
+    if st.button("🔀 Shuffle & Load New Articles"):
         st.cache_data.clear()
         st.session_state.last_source = "" 
         st.rerun()
 
     st.divider()
-    st.header("🤖 Easy AI Helper")
+    st.header("🤖 Simple AI Notes Helper")
     
     default_key = st.secrets.get("GROQ_API_KEY", "") if "GROQ_API_KEY" in st.secrets else ""
-    ai_key = st.text_input("Paste Groq / OpenAI API Key", value=default_key, type="password", help="Enter key to enable complete AI explanations")
-    ai_enabled = st.checkbox("Turn On AI Simple Notes", value=True)
+    ai_key = st.text_input("Paste Groq / OpenAI API Key", value=default_key, type="password", help="Enter key to enable easy English AI notes")
+    ai_enabled = st.checkbox("Turn On Very Simple AI Notes", value=True)
 
-# Main Screen Quick Shuffle Button
-if st.button("🔀 Shuffle & Get New Articles", type="primary", use_container_width=True):
+# Main Screen Quick Action
+if st.button("🔀 Get Fresh Random Articles", type="primary", use_container_width=True):
     st.cache_data.clear()
     st.session_state.last_source = ""
     st.rerun()
 
 st.divider()
 
-# Fetch and Lock Shuffled Feed in Session State
+# Fetch Dynamic & Unlimited Feeds
 if selected_source != st.session_state.last_source or not st.session_state.shuffled_entries:
     all_entries = []
     if rss_feeds[selected_source] == "COMBINED":
@@ -226,7 +240,7 @@ if selected_source != st.session_state.last_source or not st.session_state.shuff
         if parsed and parsed.entries:
             all_entries = parsed.entries
 
-    # Remove duplicates
+    # Deduplicate articles
     seen_titles = set()
     unique_entries = []
     for entry in all_entries:
@@ -235,7 +249,7 @@ if selected_source != st.session_state.last_source or not st.session_state.shuff
             seen_titles.add(title)
             unique_entries.append(entry)
 
-    # Shuffle once and store in session state
+    # Randomize order across all sources
     random.shuffle(unique_entries)
     st.session_state.shuffled_entries = unique_entries
     st.session_state.last_source = selected_source
@@ -245,19 +259,19 @@ current_entries = st.session_state.shuffled_entries
 if current_entries:
     col1, col2, col3 = st.columns(3)
     col1.metric("Selected Channel", selected_source.split(" - ")[0])
-    col2.metric("Total Articles Available", len(current_entries))
-    col3.metric("Live Feed", "Active 🟢")
+    col2.metric("Total Articles Loaded", len(current_entries))
+    col3.metric("Live Feed Status", "Active & Fresh 🟢")
 
     st.divider()
 
-    search_term = st.text_input("🔍 Search news by word (e.g. Wheat, Cotton, Soil, Rain)", "").lower()
+    search_term = st.text_input("🔍 Search news by word (e.g. Wheat, Cotton, Soil, Fertilizer, Rain)", "").lower()
 
     filtered_entries = [
         entry for entry in current_entries 
         if search_term in getattr(entry, 'title', '').lower() or search_term in clean_html(getattr(entry, 'summary', '')).lower()
     ]
 
-    # Sort so Pinned articles stay locked at the top
+    # Keep pinned articles at top
     pinned_titles = st.session_state.pinned_articles
     filtered_entries.sort(key=lambda x: 0 if getattr(x, 'title', '') in pinned_titles else 1)
 
@@ -304,12 +318,12 @@ if current_entries:
                 
                 if ai_enabled:
                     if ai_key:
-                        with st.expander("✨ Click to view Complete AI Explanation"):
-                            with st.spinner("AI is writing complete simple notes..."):
+                        with st.expander("✨ Click to view Super Simple English Explanation"):
+                            with st.spinner("AI is writing ultra-simple notes..."):
                                 summary_result = call_ai_summary(clean_summary, ai_key)
-                                st.info(f"**Complete Summary:**\n\n{summary_result}")
+                                st.success(f"**Easy Notes for Farmers & Students:**\n\n{summary_result}")
                     else:
-                        st.caption("🔑 *Enter your API key in the left sidebar to unlock AI notes.*")
+                        st.caption("🔑 *Enter your API key in the left sidebar to unlock easy AI notes.*")
 
             d_col1, d_col2 = st.columns(2)
             
@@ -321,7 +335,7 @@ if current_entries:
             }]).to_csv(index=False).encode('utf-8')
             
             d_col1.download_button(
-                label="📊 Save Complete CSV",
+                label="📊 Save CSV",
                 data=single_csv,
                 file_name=f"{article_slug}.csv",
                 mime="text/csv",
@@ -330,7 +344,7 @@ if current_entries:
             
             single_pdf = generate_pdf_report(selected_source, [entry])
             d_col2.download_button(
-                label="📄 Save Complete PDF",
+                label="📄 Save PDF",
                 data=single_pdf,
                 file_name=f"{article_slug}.pdf",
                 mime="application/pdf",
@@ -339,7 +353,7 @@ if current_entries:
             
             st.divider()
 
-    st.subheader(f"📥 Download All News Reports ({len(filtered_entries)} Articles)")
+    st.subheader(f"📥 Export All News ({len(filtered_entries)} Articles)")
     all_col1, all_col2 = st.columns(2)
     
     full_export_data = []
@@ -373,4 +387,4 @@ if current_entries:
     )
 
 else:
-    st.warning("No news items found right now. Please select another source or click 'Shuffle & Get New Articles'.")
+    st.warning("No news items found right now. Click 'Get Fresh Random Articles' to try pulling new sources!")
