@@ -1,4 +1,3 @@
-import streamlit as st
 import feedparser
 import urllib.parse
 import urllib.request
@@ -195,7 +194,7 @@ STATIC_FALLBACK_IMG = "https://images.unsplash.com/photo-1500382017468-9049fed74
 # ------------------------------------------------------------------------------
 # 3. Cached Data Fetchers (10-minute TTL)
 # ------------------------------------------------------------------------------
-@st.cache_data(ttl=600)
+@st.cache_resource(ttl=600)
 def fetch_feed_cached(url):
     try:
         req = urllib.request.Request(
@@ -439,6 +438,7 @@ with st.sidebar:
     st.divider()
     if st.button("🔀 Shuffle & Clear Cache"):
         st.cache_data.clear()
+        st.cache_resource.clear()
         st.session_state.last_source = "" 
         st.rerun()
 
@@ -460,6 +460,7 @@ with st.sidebar:
 # Main Refresh Action Button
 if st.button("🔀 Get Fresh Articles", type="primary", use_container_width=True):
     st.cache_data.clear()
+    st.cache_resource.clear()
     st.session_state.last_source = ""
     st.rerun()
 
