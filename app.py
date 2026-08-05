@@ -79,10 +79,32 @@ def fetch_feed(url):
     except Exception as e:
         return None
 
-def fetch_google_news_search(query):
+def fetch_unlimited_google_news_search(query):
+    """Fetches unlimited deep results by combining multiple topic parameters."""
     encoded_query = urllib.parse.quote(query)
-    google_rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en"
-    return fetch_feed(google_rss_url)
+    
+    # Run multiple variation queries to bypass Google RSS 5-10 result limits
+    queries = [
+        f"https://news.google.com/rss/search?q={encoded_query}&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={encoded_query}+when:7d&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={encoded_query}+when:30d&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={encoded_query}+agriculture&hl=en-US&gl=US&ceid=US:en",
+        f"https://news.google.com/rss/search?q={encoded_query}+farming&hl=en-US&gl=US&ceid=US:en"
+    ]
+    
+    all_unlimited_entries = []
+    seen_titles = set()
+    
+    for url in queries:
+        parsed = fetch_feed(url)
+        if parsed and parsed.entries:
+            for entry in parsed.entries:
+                title = getattr(entry, 'title', '')
+                if title not in seen_titles:
+                    seen_titles.add(title)
+                    all_unlimited_entries.append(entry)
+                    
+    return all_unlimited_entries
 
 def clean_html(raw_html):
     if not raw_html:
@@ -276,31 +298,38 @@ if selected_source != st.session_state.last_source or not st.session_state.shuff
 
 current_entries = st.session_state.shuffled_entries
 
-# Universal Search Bar with Live Loading Bar
+# Universal Search Bar with Live Progress Bar
 search_term = st.text_input("🌐 Universal Search (Search ANY word or topic from across the globe)", "").strip()
 
 if search_term:
     search_progress = st.progress(0)
-    for percent_complete in range(1, 60, 15):
+    for percent_complete in range(1, 40, 10):
         time.sleep(0.02)
         search_progress.progress(percent_complete)
         
     search_lower = search_term.lower()
+    
+    # 1. First filter existing pre-loaded database
     filtered_entries = [
         entry for entry in current_entries 
         if search_lower in getattr(entry, 'title', '').lower() or search_lower in clean_html(getattr(entry, 'summary', '')).lower()
     ]
     
-    # Universal Fallback: Query Google News live
-    if not filtered_entries:
-        st.info(f"🌐 Fetching live global news results for **'{search_term}'** from across the web...")
-        for percent_complete in range(60, 90, 10):
-            time.sleep(0.03)
-            search_progress.progress(percent_complete)
-            
-        live_search_parsed = fetch_google_news_search(search_term)
-        if live_search_parsed and live_search_parsed.entries:
-            filtered_entries = live_search_parsed.entries
+    # 2. UNLIMITED DEEP SEARCH: Always pull full global search queries from web RSS endpoints
+    st.info(f"🌐 Performing deep global web search for **'{search_term}'** across all universal news networks...")
+    for percent_complete in range(40, 90, 10):
+        time.sleep(0.03)
+        search_progress.progress(percent_complete)
+        
+    live_unlimited_entries = fetch_unlimited_google_news_search(search_term)
+    
+    # Combine and deduplicate local + live web results
+    combined_titles = {getattr(e, 'title', '') for e in filtered_entries}
+    for live_entry in live_unlimited_entries:
+        t = getattr(live_entry, 'title', '')
+        if t not in combined_titles:
+            combined_titles.add(t)
+            filtered_entries.append(live_entry)
 
     search_progress.progress(100)
     time.sleep(0.1)
@@ -308,7 +337,7 @@ if search_term:
 else:
     filtered_entries = current_entries
 
-if current_entries:
+if current_entries or filtered_entries:
     col1, col2, col3 = st.columns(3)
     col1.metric("Selected Channel", selected_source.split(" - ")[0])
     col2.metric("Total Articles Loaded", len(filtered_entries))
@@ -320,7 +349,7 @@ if current_entries:
     pinned_titles = st.session_state.pinned_articles
     filtered_entries.sort(key=lambda x: 0 if getattr(x, 'title', '') in pinned_titles else 1)
 
-    st.subheader(f"Showing News Articles ({len(filtered_entries)} Items)")
+    st.subheader(f"Showing News Articles ({len(filtered_entries)} Items Found)")
 
     for idx, entry in enumerate(filtered_entries):
         title = getattr(entry, 'title', 'Untitled Article')
