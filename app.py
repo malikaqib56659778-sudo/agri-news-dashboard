@@ -329,8 +329,9 @@ class AgriPDFReport(FPDF):
         self.rect(0, 0, 210, 22, 'F')
         self.set_font('Arial', 'B', 13)
         self.set_text_color(255, 255, 255)
+        self.set_xy(10, 8)
         self.cell(0, 6, 'AgroNova -- Easy News Report', 0, 1, 'L')
-        self.ln(8)
+        self.set_y(26)
 
     def footer(self):
         self.set_y(-15)
@@ -340,25 +341,39 @@ class AgriPDFReport(FPDF):
 
 def generate_pdf_report(source_name, entries):
     pdf = AgriPDFReport()
+    pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
+    
+    # Metadata section
+    pdf.set_x(10)
     pdf.set_font('Arial', 'B', 10)
     pdf.set_text_color(46, 125, 50)
-    pdf.cell(35, 6, "Source:", 0, 0)
+    pdf.cell(20, 6, "Source: ", 0, 0)
+    
     pdf.set_font('Arial', '', 10)
     pdf.set_text_color(50, 50, 50)
-    pdf.cell(60, 6, source_name, 0, 1)
+    clean_source = source_name.encode('latin-1', 'replace').decode('latin-1')
+    pdf.cell(0, 6, clean_source, 0, 1)
     pdf.ln(4)
     
     for item in entries:
+        # Article Title
+        pdf.set_x(10)  # Reset X cursor to prevent FPDFException horizontal boundary overflow
         pdf.set_font('Arial', 'B', 10)
         pdf.set_text_color(27, 94, 32)
         title_str = getattr(item, 'title', 'Untitled Article')
-        pdf.multi_cell(0, 5, title_str.encode('latin-1', 'replace').decode('latin-1'))
-        summary_text = clean_html(getattr(item, 'summary', 'No summary.'))
+        clean_title = title_str.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(0, 6, clean_title, align='L')
+        pdf.ln(1)
+        
+        # Article Summary
+        pdf.set_x(10)  # Reset X cursor to prevent FPDFException horizontal boundary overflow
         pdf.set_font('Arial', '', 9)
         pdf.set_text_color(60, 60, 60)
-        pdf.multi_cell(0, 4.5, summary_text.encode('latin-1', 'replace').decode('latin-1'))
-        pdf.ln(4)
+        summary_text = clean_html(getattr(item, 'summary', 'No summary.'))
+        clean_summary = summary_text.encode('latin-1', 'replace').decode('latin-1')
+        pdf.multi_cell(0, 5, clean_summary, align='L')
+        pdf.ln(5)
 
     return bytes(pdf.output())
 
@@ -377,7 +392,7 @@ if "shuffled_entries" not in st.session_state:
 # ------------------------------------------------------------------------------
 weather = fetch_live_weather()
 
-# Top Header Layout (Title + Dev Badge on Left, Weather Upper Right Corner)
+# Top Header Layout
 st.markdown(f"""
 <div class="header-container">
     <div>
@@ -404,7 +419,7 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# Small Commodity Market Cards Below
+# Small Commodity Market Cards
 st.markdown("""
 <div class="market-container">
     <div class="small-metric-card">
